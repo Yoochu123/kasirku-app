@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Kasir</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Styles for printing receipt */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #receipt-container, #receipt-container * {
+                visibility: visible;
+            }
+            #receipt-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+        .receipt {
+            font-family: 'Courier New', Courier, monospace;
+            width: 300px; /* Standard thermal printer width */
+            font-size: 12px;
+        }
+        .sidebar-icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Container Utama -->
+    <div id="app">
+
+        <!-- ===== HALAMAN LOGIN ===== -->
+        <div id="login-page" class="flex items-center justify-center min-h-screen">
+            <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-2xl">
+                <div class="flex justify-center">
+                    <i class="fas fa-store text-5xl text-indigo-600"></i>
+                </div>
+                <h2 class="text-3xl font-bold text-center text-gray-800">Selamat Datang</h2>
+                 <p class="text-center text-gray-500">Login ke akun KASIRKU Anda</p>
+                <form id="login-form" class="space-y-6">
+                    <div>
+                        <label for="login-email" class="text-sm font-medium text-gray-700">Email</label>
+                        <input id="login-email" type="email" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Masukkan email Anda">
+                    </div>
+                    <div>
+                        <label for="login-password" class="text-sm font-medium text-gray-700">Password</label>
+                        <input id="login-password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Masukkan password">
+                    </div>
+                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Login</button>
+                </form>
+                <p class="text-sm text-center text-gray-600">
+                    Belum punya akun? <a href="#" id="show-register" class="font-medium text-indigo-600 hover:text-indigo-500">Daftar di sini</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- ===== HALAMAN REGISTRASI ===== -->
+        <div id="register-page" class="flex items-center justify-center min-h-screen hidden">
+             <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-2xl">
+                <div class="flex justify-center">
+                    <i class="fas fa-user-plus text-5xl text-indigo-600"></i>
+                </div>
+                <h2 class="text-3xl font-bold text-center text-gray-800">Buat Akun Baru</h2>
+                <form id="register-form" class="space-y-6">
+                    <div>
+                        <label for="register-email" class="text-sm font-medium text-gray-700">Email</label>
+                        <input id="register-email" type="email" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Masukkan email valid">
+                    </div>
+                    <div>
+                        <label for="register-password" class="text-sm font-medium text-gray-700">Password</label>
+                        <input id="register-password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Buat password (min. 6 karakter)">
+                    </div>
+                     <div>
+                        <label for="register-confirm-password" class="text-sm font-medium text-gray-700">Konfirmasi Password</label>
+                        <input id="register-confirm-password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ulangi password">
+                    </div>
+                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Daftar</button>
+                </form>
+                <p class="text-sm text-center text-gray-600">
+                    Sudah punya akun? <a href="#" id="show-login" class="font-medium text-indigo-600 hover:text-indigo-500">Login di sini</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- ===== APLIKASI UTAMA ===== -->
+        <div id="main-app" class="hidden">
+            <div class="flex h-screen bg-gray-200">
+                <!-- Sidebar -->
+                <div class="fixed inset-y-0 left-0 z-30 w-64 overflow-y-auto transition duration-300 transform bg-gray-900 lg:translate-x-0 lg:static lg:inset-0">
+                    <div class="flex flex-col items-center justify-center mt-8">
+                         <div class="flex items-center">
+                            <i class="fas fa-cash-register text-white text-2xl"></i>
+                            <span class="mx-2 text-2xl font-semibold text-white">KASIRKU</span>
+                        </div>
+                        <div id="user-info" class="mt-2 flex items-center">
+                            <!-- User info will be generated by JS -->
+                        </div>
+                    </div>
+                    <nav class="mt-10">
+                        <a class="nav-link flex items-center px-6 py-3 mt-4 text-gray-100 bg-gray-700" href="#" data-page="dashboard">
+                            <i class="fas fa-tachometer-alt sidebar-icon"></i><span class="mx-3">Dashboard</span>
+                        </a>
+                        <a class="nav-link flex items-center px-6 py-3 mt-4 text-gray-400 hover:bg-gray-700 hover:text-gray-100" href="#" data-page="order">
+                            <i class="fas fa-shopping-cart sidebar-icon"></i><span class="mx-3">Order</span>
+                        </a>
+                        <a class="nav-link flex items-center px-6 py-3 mt-4 text-gray-400 hover:bg-gray-700 hover:text-gray-100" href="#" data-page="menu">
+                             <i class="fas fa-book-open sidebar-icon"></i><span class="mx-3">Daftar Menu</span>
+                        </a>
+                        <a class="nav-link flex items-center px-6 py-3 mt-4 text-gray-400 hover:bg-gray-700 hover:text-gray-100" href="#" data-page="expense">
+                            <i class="fas fa-money-bill-wave sidebar-icon"></i><span class="mx-3">Pengeluaran</span>
+                        </a>
+                        <a class="nav-link flex items-center px-6 py-3 mt-4 text-gray-400 hover:bg-gray-700 hover:text-gray-100" href="#" data-page="settings">
+                            <i class="fas fa-cog sidebar-icon"></i><span class="mx-3">Pengaturan</span>
+                        </a>
+                    </nav>
+                     <div class="absolute bottom-0 w-full">
+                        <button id="logout-btn" class="flex items-center w-full px-6 py-3 mt-4 text-gray-400 hover:bg-gray-700 hover:text-gray-100">
+                           <i class="fas fa-sign-out-alt sidebar-icon"></i><span class="mx-3">Logout</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Konten Utama -->
+                <div class="flex flex-col flex-1 overflow-hidden">
+                    <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+                        
+                        <!-- Page: Dashboard -->
+                        <div id="dashboard-page" class="page-content">
+                            <h1 class="text-3xl font-semibold text-gray-800 mb-6">Dashboard</h1>
+                            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Pemasukkan Hari Ini</h3>
+                                    <p id="daily-income" class="mt-2 text-3xl font-bold text-green-600">Rp 0</p>
+                                </div>
+                                <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Pengeluaran Hari Ini</h3>
+                                    <p id="daily-expense" class="mt-2 text-3xl font-bold text-red-600">Rp 0</p>
+                                </div>
+                                <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Laba Hari Ini</h3>
+                                    <p id="daily-profit" class="mt-2 text-3xl font-bold text-blue-600">Rp 0</p>
+                                </div>
+                                <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Total Pemasukkan Bulan Ini</h3>
+                                    <p id="monthly-income" class="mt-2 text-3xl font-bold text-green-700">Rp 0</p>
+                                </div>
+                                 <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Total Pengeluaran Bulan Ini</h3>
+                                    <p id="monthly-expense" class="mt-2 text-3xl font-bold text-red-700">Rp 0</p>
+                                </div>
+                                <div class="p-6 bg-white rounded-lg shadow-md">
+                                    <h3 class="text-sm font-medium text-gray-500">Total Laba Bulan Ini</h3>
+                                    <p id="monthly-profit" class="mt-2 text-3xl font-bold text-blue-700">Rp 0</p>
+                                </div>
+                            </div>
+                            <div class="mt-6 p-6 bg-white rounded-lg shadow-md">
+                                <h3 class="text-lg font-semibold text-gray-700 mb-4">Grafik Kinerja 7 Hari Terakhir</h3>
+                                <canvas id="profitChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Page: Order -->
+                        <div id="order-page" class="page-content hidden">
+                            <h1 class="text-3xl font-semibold text-gray-800 mb-6">Buat Pesanan Baru</h1>
+                            <div class="flex flex-col lg:flex-row gap-6">
+                                <!-- Kolom Kiri: Pilihan Menu -->
+                                <div class="w-full lg:w-3/5 bg-white p-6 rounded-lg shadow-md">
+                                    <h2 class="text-xl font-bold mb-4">Pilih Menu</h2>
+                                    <div id="order-menu-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto">
+                                        <!-- Menu items will be populated by JS -->
+                                    </div>
+                                </div>
+                                <!-- Kolom Kanan: Detail Pesanan -->
+                                <div class="w-full lg:w-2/5 bg-white p-6 rounded-lg shadow-md">
+                                    <h2 class="text-xl font-bold mb-4">Detail Pesanan</h2>
+                                    <div>
+                                        <label for="customer-name" class="block text-sm font-medium text-gray-700">Nama Pembeli</label>
+                                        <input type="text" id="customer-name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Contoh: Budi">
+                                    </div>
+                                    <div id="order-summary" class="mt-4 space-y-2 max-h-60 overflow-y-auto">
+                                        <!-- Order summary will be populated by JS -->
+                                        <p class="text-gray-500 text-center">Keranjang kosong</p>
+                                    </div>
+                                    <div class="mt-6 border-t pt-4">
+                                        <div class="flex justify-between font-bold text-lg">
+                                            <span>Total Bayar:</span>
+                                            <span id="total-payment">Rp 0</span>
+                                        </div>
+                                        <button id="save-print-btn" class="mt-4 w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-gray-400">
+                                            Simpan & Cetak Nota
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                             <!-- Riwayat Order -->
+                            <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+                                <h2 class="text-xl font-bold mb-4">Riwayat Order Hari Ini</h2>
+                                <div class="max-h-[40vh] overflow-y-auto">
+                                    <table class="w-full">
+                                        <thead>
+                                            <tr class="text-left bg-gray-100">
+                                                <th class="p-3">Waktu</th>
+                                                <th class="p-3">Nama Pembeli</th>
+                                                <th class="p-3">Total</th>
+                                                <th class="p-3 text-center">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="order-history-body">
+                                            <!-- History rows will be populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Page: Daftar Menu -->
+                        <div id="menu-page" class="page-content hidden">
+                            <div class="flex justify-between items-center mb-6">
+                                <h1 class="text-3xl font-semibold text-gray-800">Daftar Menu</h1>
+                                <button id="add-menu-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Tambah Menu</button>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="text-left bg-gray-100">
+                                            <th class="p-3">Nama Makanan</th>
+                                            <th class="p-3">Harga</th>
+                                            <th class="p-3">Stok</th>
+                                            <th class="p-3">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="menu-table-body">
+                                        <!-- Menu table rows will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                             <!-- Menu Terjual Hari Ini -->
+                            <div class="mt-8 bg-white p-6 rounded-lg shadow-md">
+                                <h2 class="text-xl font-bold mb-4">Menu Terjual Hari Ini</h2>
+                                <div class="max-h-[40vh] overflow-y-auto">
+                                    <table class="w-full">
+                                        <thead>
+                                            <tr class="text-left bg-gray-100">
+                                                <th class="p-3">Nama Menu</th>
+                                                <th class="p-3">Jumlah Terjual</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="todays-sales-body">
+                                            <!-- Sales rows will be populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Page: Pengeluaran -->
+                        <div id="expense-page" class="page-content hidden">
+                            <h1 class="text-3xl font-semibold text-gray-800 mb-6">Catat Pengeluaran</h1>
+                            <div class="flex flex-col lg:flex-row gap-6">
+                                <!-- Form Pengeluaran -->
+                                <div class="w-full lg:w-1/3 bg-white p-6 rounded-lg shadow-md">
+                                    <h2 class="text-xl font-bold mb-4">Tambah Pengeluaran Baru</h2>
+                                    <form id="expense-form" class="space-y-4">
+                                        <div>
+                                            <label for="expense-description" class="block text-sm font-medium text-gray-700">Keperluan</label>
+                                            <input type="text" id="expense-description" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md" required placeholder="Contoh: Beli Gas">
+                                        </div>
+                                        <div>
+                                            <label for="expense-amount" class="block text-sm font-medium text-gray-700">Nominal</label>
+                                            <input type="number" id="expense-amount" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md" required placeholder="Contoh: 25000">
+                                        </div>
+                                        <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Simpan Pengeluaran</button>
+                                    </form>
+                                </div>
+                                <!-- Tabel Pengeluaran -->
+                                <div class="w-full lg:w-2/3 bg-white p-6 rounded-lg shadow-md">
+                                    <h2 class="text-xl font-bold mb-4">Riwayat Pengeluaran</h2>
+                                    <div class="max-h-[60vh] overflow-y-auto">
+                                        <table class="w-full">
+                                            <thead>
+                                                <tr class="text-left bg-gray-100">
+                                                    <th class="p-3">Tanggal</th>
+                                                    <th class="p-3">Keperluan</th>
+                                                    <th class="p-3">Nominal</th>
+                                                    <th class="p-3 text-center">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="expense-table-body">
+                                                <!-- Expense rows will be populated by JS -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Page: Pengaturan -->
+                        <div id="settings-page" class="page-content hidden">
+                            <h1 class="text-3xl font-semibold text-gray-800 mb-6">Pengaturan Toko</h1>
+                            <div class="w-full max-w-lg bg-white p-6 rounded-lg shadow-md">
+                                <form id="settings-form" class="space-y-6">
+                                    <div>
+                                        <label for="shop-name" class="block text-sm font-medium text-gray-700">Nama Warung/Toko</label>
+                                        <input type="text" id="shop-name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                    </div>
+                                    <div>
+                                        <label for="shop-phone" class="block text-sm font-medium text-gray-700">No. HP</label>
+                                        <input type="text" id="shop-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="shop-address" class="block text-sm font-medium text-gray-700">Alamat</label>
+                                        <textarea id="shop-address" rows="3" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+                                    </div>
+                                    <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Simpan Pengaturan</button>
+                                </form>
+                            </div>
+                        </div>
+
+                    </main>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal Tambah/Edit Menu -->
+        <div id="menu-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+            <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+                <div class="mt-3 text-center">
+                    <h3 id="modal-title" class="text-lg leading-6 font-medium text-gray-900">Tambah Menu Baru</h3>
+                    <form id="menu-form" class="mt-2 px-7 py-3 space-y-4">
+                        <input type="hidden" id="menu-id">
+                        <div>
+                           <label for="menu-name" class="text-left block text-sm font-medium text-gray-700">Nama Makanan</label>
+                           <input type="text" id="menu-name" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                        </div>
+                        <div>
+                           <label for="menu-price" class="text-left block text-sm font-medium text-gray-700">Harga</label>
+                           <input type="number" id="menu-price" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                        </div>
+                        <div>
+                           <label for="menu-stock" class="text-left block text-sm font-medium text-gray-700">Stok Tersedia</glabel>
+                           <input type="number" id="menu-stock" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                        </div>
+
+                        <div class="items-center px-4 py-3 flex justify-end gap-3">
+                            <button id="cancel-menu-btn" type="button" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Batal</button>
+                            <button id="save-menu-btn" type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Simpan</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Container untuk Nota yang akan dicetak -->
+        <div id="receipt-container" class="hidden">
+            <div id="receipt-content" class="receipt bg-white p-2 text-black">
+                <!-- Receipt content will be generated by JS -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBqfg484fCg411pgq7zA9dH-wxlVuteFMU",
+            authDomain: "kasirku-app-dac1e.firebaseapp.com",
+            projectId: "kasirku-app-dac1e",
+            storageBucket: "kasirku-app-dac1e.firebasestorage.app",
+            messagingSenderId: "747069808586",
+            appId: "1:747069808586:web:dfc774f90920e89464f933",
+            measurementId: "G-C6ZWBFK38J"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // STATE MANAGEMENT (Now from Firestore)
+        let menuItems = [];
+        let orders = [];
+        let expenses = [];
+        let shopSettings = {}; 
+        let profitChartInstance = null;
+        let currentUser = null;
+
+        // Unsubscribe listeners
+        let menuUnsubscribe = null;
+        let ordersUnsubscribe = null;
+        let expensesUnsubscribe = null;
+        let settingsUnsubscribe = null;
+        
+        let currentOrder = {
+            customerName: '',
+            items: {}, // {itemId: {name, price, quantity}}
+            total: 0,
+        };
+
+        // UI ELEMENTS
+        const loginPage = document.getElementById('login-page');
+        const registerPage = document.getElementById('register-page');
+        const mainApp = document.getElementById('main-app');
+        const pages = document.querySelectorAll('.page-content');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const menuModal = document.getElementById('menu-modal');
+        const userInfo = document.getElementById('user-info');
+
+        // UTILITY FUNCTIONS
+        const formatCurrency = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+
+        // PAGE NAVIGATION
+        const showPage = (pageId) => {
+            pages.forEach(page => page.classList.add('hidden'));
+            document.getElementById(`${pageId}-page`).classList.remove('hidden');
+
+            navLinks.forEach(link => {
+                link.classList.remove('bg-gray-700', 'text-gray-100');
+                link.classList.add('text-gray-400');
+                if (link.dataset.page === pageId) {
+                    link.classList.add('bg-gray-700', 'text-gray-100');
+                }
+            });
+            
+            // Re-render data when switching pages to ensure it's fresh
+            if (pageId === 'dashboard') {
+                updateDashboard();
+                renderProfitChart();
+            }
+            if (pageId === 'menu') {
+                renderMenuTable();
+                renderTodaysSales();
+            }
+            if (pageId === 'order') {
+                renderOrderMenuList();
+                renderOrderHistory();
+            }
+            if (pageId === 'expense') renderExpenseTable();
+            if (pageId === 'settings') loadShopSettingsToForm();
+        };
+        
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                showPage(link.dataset.page);
+            });
+        });
+
+        const updateUserInfoDisplay = () => {
+            if (currentUser && userInfo) {
+                userInfo.innerHTML = `
+                    <i class="fas fa-user-circle text-gray-500"></i>
+                    <span class="mx-2 text-sm text-gray-400">Login sebagai: <strong>${currentUser.email}</strong></span>
+                `;
+            } else if (userInfo) {
+                userInfo.innerHTML = '';
+            }
+        };
+
+        // AUTHENTICATION LOGIC
+        const showLoginPage = () => {
+            document.body.className = 'bg-gradient-to-br from-indigo-600 to-purple-700';
+            loginPage.classList.remove('hidden');
+            registerPage.classList.add('hidden');
+            mainApp.classList.add('hidden');
+        };
+
+        const showRegisterPage = () => {
+            document.body.className = 'bg-gradient-to-br from-indigo-600 to-purple-700';
+            loginPage.classList.add('hidden');
+            registerPage.classList.remove('hidden');
+            mainApp.classList.add('hidden');
+        };
+
+        const showMainApp = () => {
+            document.body.className = 'bg-gray-100';
+            loginPage.classList.add('hidden');
+            registerPage.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+            updateUserInfoDisplay();
+            showPage('dashboard');
+        };
+
+        document.getElementById('show-register').addEventListener('click', (e) => {
+            e.preventDefault();
+            showRegisterPage();
+        });
+
+        document.getElementById('show-login').addEventListener('click', (e) => {
+            e.preventDefault();
+            showLoginPage();
+        });
+
+        document.getElementById('register-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const confirmPassword = document.getElementById('register-confirm-password').value;
+
+            if (password !== confirmPassword) {
+                alert('Password tidak cocok!');
+                return;
+            }
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    const user = userCredential.user;
+                    // Create initial data for new user in Firestore
+                    const defaultShopSettings = {
+                        name: 'Toko Anda', phone: '08123456789', address: 'Alamat Toko Anda'
+                    };
+                    const defaultMenuItems = [
+                        { name: 'Nasi Goreng', price: 15000, stock: 20 },
+                        { name: 'Mie Goreng', price: 13000, stock: 25 },
+                        { name: 'Ayam Bakar', price: 25000, stock: 15 },
+                        { name: 'Es Teh Manis', price: 5000, stock: 50 },
+                    ];
+                    
+                    db.collection('users').doc(user.uid).set({
+                        email: user.email,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        shopSettings: defaultShopSettings
+                    });
+                    
+                    const batch = db.batch();
+                    defaultMenuItems.forEach(item => {
+                        const docRef = db.collection('users').doc(user.uid).collection('menuItems').doc();
+                        batch.set(docRef, item);
+                    });
+                    batch.commit();
+
+                    alert('Registrasi berhasil! Silakan login.');
+                    showLoginPage();
+                    e.target.reset();
+                })
+                .catch(error => {
+                    alert(`Error: ${error.message}`);
+                });
+        });
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => {
+                    alert(`Error: ${error.message}`);
+                });
+        });
+        
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            auth.signOut();
+        });
+        
+        // Listen for auth state changes
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                listenToDataChanges();
+                showMainApp();
+            } else {
+                currentUser = null;
+                detachListeners();
+                showLoginPage();
+            }
+        });
+
+        // FIRESTORE DATA LISTENERS
+        const listenToDataChanges = () => {
+            if (!currentUser) return;
+            const uid = currentUser.uid;
+
+            // Detach old listeners if they exist
+            detachListeners();
+
+            // Listen to settings
+            settingsUnsubscribe = db.collection('users').doc(uid)
+                .onSnapshot(doc => {
+                    if(doc.exists) {
+                       shopSettings = doc.data().shopSettings || {};
+                       if (document.getElementById('settings-page').style.display !== 'none') {
+                           loadShopSettingsToForm();
+                       }
+                    }
+                }, err => console.error("Error listening to settings:", err));
+
+            // Listen to menu items
+            menuUnsubscribe = db.collection('users').doc(uid).collection('menuItems')
+                .onSnapshot(snapshot => {
+                    menuItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderMenuTable();
+                    renderOrderMenuList();
+                }, err => console.error("Error listening to menu:", err));
+
+            // Listen to orders
+            ordersUnsubscribe = db.collection('users').doc(uid).collection('orders')
+                .onSnapshot(snapshot => {
+                    orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    updateDashboard();
+                    renderProfitChart();
+                    renderOrderHistory();
+                    renderTodaysSales();
+                }, err => console.error("Error listening to orders:", err));
+            
+            // Listen to expenses
+            expensesUnsubscribe = db.collection('users').doc(uid).collection('expenses')
+                .onSnapshot(snapshot => {
+                    expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    updateDashboard();
+                    renderProfitChart();
+                    renderExpenseTable();
+                }, err => console.error("Error listening to expenses:", err));
+        };
+        
+        const detachListeners = () => {
+            if (menuUnsubscribe) menuUnsubscribe();
+            if (ordersUnsubscribe) ordersUnsubscribe();
+            if (expensesUnsubscribe) expensesUnsubscribe();
+            if (settingsUnsubscribe) settingsUnsubscribe();
+        };
+
+        // MENU MANAGEMENT
+        const menuTableBody = document.getElementById('menu-table-body');
+        const renderMenuTable = () => {
+            menuTableBody.innerHTML = '';
+            if (menuItems.length === 0) {
+                 menuTableBody.innerHTML = `<tr><td colspan="4" class="text-center p-4">Belum ada menu.</td></tr>`;
+                 return;
+            }
+            menuItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-3">${item.name}</td>
+                    <td class="p-3">${formatCurrency(item.price)}</td>
+                    <td class="p-3">${item.stock}</td>
+                    <td class="p-3">
+                        <button class="edit-menu-btn text-blue-500 hover:text-blue-700 mr-2" data-id="${item.id}"><i class="fas fa-edit"></i></button>
+                        <button class="delete-menu-btn text-red-500 hover:text-red-700" data-id="${item.id}"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                menuTableBody.appendChild(row);
+            });
+        };
+
+        document.getElementById('add-menu-btn').addEventListener('click', () => {
+            document.getElementById('menu-form').reset();
+            document.getElementById('menu-id').value = '';
+            document.getElementById('modal-title').innerText = 'Tambah Menu Baru';
+            menuModal.classList.remove('hidden');
+        });
+
+        document.getElementById('cancel-menu-btn').addEventListener('click', () => {
+            menuModal.classList.add('hidden');
+        });
+
+        document.getElementById('menu-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('menu-id').value;
+            const name = document.getElementById('menu-name').value;
+            const price = parseFloat(document.getElementById('menu-price').value);
+            const stock = parseInt(document.getElementById('menu-stock').value);
+
+            const menuItemData = { name, price, stock };
+            const menuCollection = db.collection('users').doc(currentUser.uid).collection('menuItems');
+
+            if (id) { // Edit
+                menuCollection.doc(id).update(menuItemData)
+                  .catch(err => alert("Error updating menu: " + err.message));
+            } else { // Add
+                menuCollection.add(menuItemData)
+                  .catch(err => alert("Error adding menu: " + err.message));
+            }
+            menuModal.classList.add('hidden');
+        });
+
+        menuTableBody.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            const id = target.dataset.id;
+            if (target.classList.contains('edit-menu-btn')) {
+                const item = menuItems.find(i => i.id == id);
+                document.getElementById('menu-id').value = item.id;
+                document.getElementById('menu-name').value = item.name;
+                document.getElementById('menu-price').value = item.price;
+                document.getElementById('menu-stock').value = item.stock;
+                document.getElementById('modal-title').innerText = 'Edit Menu';
+                menuModal.classList.remove('hidden');
+            }
+
+            if (target.classList.contains('delete-menu-btn')) {
+                if (confirm('Anda yakin ingin menghapus menu ini?')) {
+                    db.collection('users').doc(currentUser.uid).collection('menuItems').doc(id).delete();
+                }
+            }
+        });
+
+        // ORDER LOGIC
+        const orderMenuList = document.getElementById('order-menu-list');
+        const orderSummary = document.getElementById('order-summary');
+        const totalPaymentEl = document.getElementById('total-payment');
+
+        const renderOrderMenuList = () => {
+            orderMenuList.innerHTML = '';
+            menuItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = `p-4 border rounded-lg shadow-sm ${item.stock > 0 ? 'bg-white' : 'bg-gray-200 opacity-50'}`;
+                card.innerHTML = `
+                    <h4 class="font-bold">${item.name}</h4>
+                    <p class="text-sm text-gray-600">${formatCurrency(item.price)}</p>
+                    <p class="text-xs text-gray-500">Stok: ${item.stock}</p>
+                    <div class="flex items-center justify-center mt-2">
+                        <button class="order-btn-minus bg-red-500 text-white w-6 h-6 rounded-full disabled:bg-gray-300" data-id="${item.id}" ${item.stock === 0 ? 'disabled' : ''}>-</button>
+                        <span class="quantity-display mx-2 w-8 text-center" data-id="${item.id}">0</span>
+                        <button class="order-btn-plus bg-green-500 text-white w-6 h-6 rounded-full" data-id="${item.id}" ${item.stock === 0 ? 'disabled' : ''}>+</button>
+                    </div>
+                `;
+                orderMenuList.appendChild(card);
+            });
+        };
+
+        const updateOrderSummary = () => {
+            orderSummary.innerHTML = '';
+            currentOrder.total = 0;
+            const items = Object.values(currentOrder.items);
+            if (items.length === 0) {
+                orderSummary.innerHTML = '<p class="text-gray-500 text-center">Keranjang kosong</p>';
+                totalPaymentEl.innerText = formatCurrency(0);
+                document.getElementById('save-print-btn').disabled = true;
+                return;
+            }
+
+            items.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                currentOrder.total += itemTotal;
+                const itemEl = document.createElement('div');
+                itemEl.className = 'flex justify-between items-center text-sm';
+                itemEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${item.name}</p>
+                        <p class="text-xs text-gray-500">${item.quantity} x ${formatCurrency(item.price)}</p>
+                    </div>
+                    <span>${formatCurrency(itemTotal)}</span>
+                `;
+                orderSummary.appendChild(itemEl);
+            });
+            totalPaymentEl.innerText = formatCurrency(currentOrder.total);
+            document.getElementById('save-print-btn').disabled = false;
+        };
+
+        const updateQuantityDisplay = (itemId, quantity) => {
+            const display = document.querySelector(`.quantity-display[data-id="${itemId}"]`);
+            if (display) display.textContent = quantity;
+        };
+
+        orderMenuList.addEventListener('click', e => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            const id = target.dataset.id;
+            const item = menuItems.find(i => i.id == id);
+            if (!item) return;
+
+            let currentQuantity = currentOrder.items[id] ? currentOrder.items[id].quantity : 0;
+
+            if (target.classList.contains('order-btn-plus')) {
+                if (currentQuantity < item.stock) {
+                    currentQuantity++;
+                } else {
+                    alert('Stok tidak mencukupi!');
+                }
+            } else if (target.classList.contains('order-btn-minus')) {
+                if (currentQuantity > 0) {
+                    currentQuantity--;
+                }
+            }
+
+            if (currentQuantity > 0) {
+                currentOrder.items[id] = {
+                    name: item.name,
+                    price: item.price,
+                    quantity: currentQuantity
+                };
+            } else {
+                delete currentOrder.items[id];
+            }
+            
+            updateQuantityDisplay(id, currentQuantity);
+            updateOrderSummary();
+        });
+
+        const resetOrder = () => {
+            currentOrder = { customerName: '', items: {}, total: 0 };
+            document.getElementById('customer-name').value = '';
+            document.querySelectorAll('.quantity-display').forEach(el => el.textContent = '0');
+            updateOrderSummary();
+        };
+
+        const printReceipt = () => {
+            const receiptContainer = document.getElementById('receipt-container');
+            const receiptContent = document.getElementById('receipt-content');
+            const now = new Date();
+            const receiptId = `CSH-${now.getTime().toString().slice(-6)}`;
+            
+            let itemsHtml = '';
+            Object.values(currentOrder.items).forEach(item => {
+                const total = formatCurrency(item.quantity * item.price).replace('Rp', '').trim();
+                itemsHtml += `
+                    <div>${item.name}</div>
+                    <div style="display: flex; justify-content: space-between;">
+                      <span>${item.quantity} x ${formatCurrency(item.price).replace('Rp', '').trim()}</span>
+                      <span>${total}</span>
+                    </div>
+                `;
+            });
+
+            receiptContent.innerHTML = `
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; font-weight: bold;">${shopSettings.name}</h3>
+                    <p>${shopSettings.address}</p>
+                    <p>Telp: ${shopSettings.phone}</p>
+                </div>
+                <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+                <p>No: ${receiptId}</p>
+                <p>Admin: ${currentUser.email}</p>
+                <p>Pelanggan: ${currentOrder.customerName || 'Umum'}</p>
+                <p>Tanggal: ${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID')}</p>
+                <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+                ${itemsHtml}
+                <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+                <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                    <span>TOTAL</span>
+                    <span>${formatCurrency(currentOrder.total)}</span>
+                </div>
+                <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+                <div style="text-align: center; margin-top: 10px;">
+                    <p>Terima Kasih!</p>
+                    <p>Selamat Menikmati</p>
+                </div>
+            `;
+            
+            receiptContainer.classList.remove('hidden');
+            window.print();
+            receiptContainer.classList.add('hidden');
+        };
+        
+        document.getElementById('save-print-btn').addEventListener('click', () => {
+            const customerName = document.getElementById('customer-name').value;
+            if (!customerName) {
+                alert('Silakan masukkan nama pembeli.');
+                return;
+            }
+            if (Object.keys(currentOrder.items).length === 0) {
+                alert('Keranjang masih kosong.');
+                return;
+            }
+
+            currentOrder.customerName = customerName;
+            
+            const newOrder = {
+                date: new Date().toISOString(),
+                ...currentOrder
+            };
+
+            const batch = db.batch();
+            const ordersCollection = db.collection('users').doc(currentUser.uid).collection('orders');
+            batch.set(ordersCollection.doc(), newOrder);
+            
+            Object.keys(currentOrder.items).forEach(itemId => {
+                const itemRef = db.collection('users').doc(currentUser.uid).collection('menuItems').doc(itemId);
+                const quantitySold = currentOrder.items[itemId].quantity;
+                batch.update(itemRef, { stock: firebase.firestore.FieldValue.increment(-quantitySold) });
+            });
+            
+            batch.commit()
+                .then(() => {
+                    printReceipt();
+                    resetOrder();
+                })
+                .catch(err => alert("Error saving order: " + err.message));
+        });
+        
+        // EXPENSE LOGIC
+        const expenseTableBody = document.getElementById('expense-table-body');
+        const renderExpenseTable = () => {
+            expenseTableBody.innerHTML = '';
+            if (expenses.length === 0) {
+                expenseTableBody.innerHTML = `<tr><td colspan="4" class="text-center p-4">Belum ada pengeluaran.</td></tr>`;
+                return;
+            }
+            const sortedExpenses = [...expenses].sort((a,b) => new Date(b.date) - new Date(a.date));
+            sortedExpenses.forEach(expense => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-3">${new Date(expense.date).toLocaleDateString('id-ID')}</td>
+                    <td class="p-3">${expense.description}</td>
+                    <td class="p-3">${formatCurrency(expense.amount)}</td>
+                    <td class="p-3 text-center">
+                        <button class="delete-expense-btn text-red-500 hover:text-red-700" data-id="${expense.id}"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                expenseTableBody.appendChild(row);
+            });
+        };
+
+        document.getElementById('expense-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const description = document.getElementById('expense-description').value;
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+
+            if (description && amount > 0) {
+                db.collection('users').doc(currentUser.uid).collection('expenses').add({
+                    date: new Date().toISOString(),
+                    description,
+                    amount
+                }).then(() => {
+                     e.target.reset();
+                }).catch(err => alert("Error saving expense: " + err.message));
+            } else {
+                alert('Deskripsi dan nominal harus diisi dengan benar.');
+            }
+        });
+
+        // SETTINGS LOGIC
+        const loadShopSettingsToForm = () => {
+            document.getElementById('shop-name').value = shopSettings.name || '';
+            document.getElementById('shop-phone').value = shopSettings.phone || '';
+            document.getElementById('shop-address').value = shopSettings.address || '';
+        };
+
+        document.getElementById('settings-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newSettings = {
+                name: document.getElementById('shop-name').value,
+                phone: document.getElementById('shop-phone').value,
+                address: document.getElementById('shop-address').value
+            };
+            db.collection('users').doc(currentUser.uid).update({ shopSettings: newSettings })
+                .then(() => alert('Pengaturan berhasil disimpan!'))
+                .catch(err => alert("Error saving settings: " + err.message));
+        });
+
+        // Order History and Today's Sales
+        const renderOrderHistory = () => {
+            const historyBody = document.getElementById('order-history-body');
+            historyBody.innerHTML = '';
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todaysOrders = orders.filter(o => o.date.startsWith(todayStr));
+
+            if (todaysOrders.length === 0) {
+                historyBody.innerHTML = `<tr><td colspan="4" class="text-center p-4">Belum ada pesanan hari ini.</td></tr>`;
+                return;
+            }
+            
+            const sortedOrders = [...todaysOrders].sort((a,b) => new Date(b.date) - new Date(a.date));
+            sortedOrders.forEach(order => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-3">${new Date(order.date).toLocaleTimeString('id-ID')}</td>
+                    <td class="p-3">${order.customerName}</td>
+                    <td class="p-3">${formatCurrency(order.total)}</td>
+                    <td class="p-3 text-center">
+                        <button class="delete-order-btn text-red-500 hover:text-red-700" data-id="${order.id}"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                historyBody.appendChild(row);
+            });
+        };
+
+        const renderTodaysSales = () => {
+            const salesBody = document.getElementById('todays-sales-body');
+            salesBody.innerHTML = '';
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todaysOrders = orders.filter(o => o.date.startsWith(todayStr));
+            
+            const salesSummary = {};
+
+            todaysOrders.forEach(order => {
+                Object.values(order.items).forEach((itemDetails) => {
+                    const itemName = itemDetails.name;
+                    if (salesSummary[itemName]) {
+                        salesSummary[itemName].quantity += itemDetails.quantity;
+                    } else {
+                        salesSummary[itemName] = {
+                            name: itemDetails.name,
+                            quantity: itemDetails.quantity
+                        };
+                    }
+                });
+            });
+
+            if (Object.keys(salesSummary).length === 0) {
+                salesBody.innerHTML = `<tr><td colspan="2" class="text-center p-4">Belum ada menu yang terjual hari ini.</td></tr>`;
+                return;
+            }
+
+            Object.values(salesSummary).forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-3">${item.name}</td>
+                    <td class="p-3">${item.quantity}</td>
+                `;
+                salesBody.appendChild(row);
+            });
+        };
+        
+        // HISTORY DELETION LOGIC
+        document.getElementById('order-history-body').addEventListener('click', (e) => {
+            const target = e.target.closest('.delete-order-btn');
+            if (target) {
+                const orderId = target.dataset.id;
+                if (confirm('Anda yakin ingin menghapus riwayat pesanan ini? Menghapus ini tidak akan mengembalikan stok.')) {
+                    db.collection('users').doc(currentUser.uid).collection('orders').doc(orderId).delete();
+                }
+            }
+        });
+
+        document.getElementById('expense-table-body').addEventListener('click', (e) => {
+            const target = e.target.closest('.delete-expense-btn');
+            if (target) {
+                const expenseId = target.dataset.id;
+                if (confirm('Anda yakin ingin menghapus riwayat pengeluaran ini?')) {
+                    db.collection('users').doc(currentUser.uid).collection('expenses').doc(expenseId).delete();
+                }
+            }
+        });
+
+        // DASHBOARD LOGIC
+        const updateDashboard = () => {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            const dailyIncome = orders
+                .filter(o => o.date.startsWith(todayStr))
+                .reduce((sum, o) => sum + o.total, 0);
+
+            const monthlyIncome = orders
+                .filter(o => {
+                    const orderDate = new Date(o.date);
+                    return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
+                })
+                .reduce((sum, o) => sum + o.total, 0);
+
+            const dailyExpense = expenses
+                .filter(e => e.date.startsWith(todayStr))
+                .reduce((sum, e) => sum + e.amount, 0);
+
+            const monthlyExpense = expenses
+                .filter(e => {
+                    const expenseDate = new Date(e.date);
+                    return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+                })
+                .reduce((sum, e) => sum + e.amount, 0);
+
+            const dailyProfit = dailyIncome - dailyExpense;
+            const monthlyProfit = monthlyIncome - monthlyExpense;
+
+            document.getElementById('daily-income').textContent = formatCurrency(dailyIncome);
+            document.getElementById('monthly-income').textContent = formatCurrency(monthlyIncome);
+            document.getElementById('daily-expense').textContent = formatCurrency(dailyExpense);
+            document.getElementById('monthly-expense').textContent = formatCurrency(monthlyExpense);
+            document.getElementById('daily-profit').textContent = formatCurrency(dailyProfit);
+            document.getElementById('monthly-profit').textContent = formatCurrency(monthlyProfit);
+        };
+        
+        const renderProfitChart = () => {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+            if (profitChartInstance) {
+                profitChartInstance.destroy();
+            }
+
+            const labels = [];
+            const incomeData = [];
+            const expenseData = [];
+            const profitData = [];
+
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                labels.push(date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
+
+                const dailyIncome = orders
+                    .filter(o => o.date.startsWith(dateStr))
+                    .reduce((sum, o) => sum + o.total, 0);
+                incomeData.push(dailyIncome);
+
+                const dailyExpense = expenses
+                    .filter(e => e.date.startsWith(dateStr))
+                    .reduce((sum, e) => sum + e.amount, 0);
+                expenseData.push(dailyExpense);
+
+                profitData.push(dailyIncome - dailyExpense);
+            }
+            
+            const incomeGradient = ctx.createLinearGradient(0, 0, 0, 400);
+            incomeGradient.addColorStop(0, 'rgba(16, 185, 129, 0.6)');
+            incomeGradient.addColorStop(1, 'rgba(16, 185, 129, 0.05)');
+
+            const expenseGradient = ctx.createLinearGradient(0, 0, 0, 400);
+            expenseGradient.addColorStop(0, 'rgba(239, 68, 68, 0.6)');
+            expenseGradient.addColorStop(1, 'rgba(239, 68, 68, 0.05)');
+
+
+            profitChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Pemasukkan',
+                            data: incomeData,
+                            borderColor: '#10B981',
+                            backgroundColor: incomeGradient,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                        {
+                            label: 'Pengeluaran',
+                            data: expenseData,
+                            borderColor: '#EF4444',
+                            backgroundColor: expenseGradient,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                        {
+                            label: 'Laba',
+                            data: profitData,
+                            borderColor: '#3B82F6',
+                            tension: 0.4,
+                            fill: false,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += formatCurrency(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+    });
+    </script>
+</body>
+</html>
+
